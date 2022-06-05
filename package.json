@@ -1,0 +1,61 @@
+{
+  "name": "md-futura",
+  "version": "0.0.1",
+  "description": "",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "mdf": "dist/cli.js"
+  },
+  "scripts": {
+    "start": "ts-node ./src/index.ts",
+    "build": "rm -rf dist && tsc --project tsconfig.src.json && cp ./src/*.html ./dist",
+    "live": "DEBUG=info nodemon -x \"ts-node\" ./test/test.ts --ext ts,html,md --ignore ./test/generated",
+    "prepare": "npm run build",
+    "test": "ts-node ./test/test.ts"
+  },
+  "author": "Soluzioni Futura <info@soluzionifutura.it>",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soluzionifutura/retry-module.git"
+  },
+  "devDependencies": {
+    "@soluzioni-futura/eslint-config-soluzioni-futura": "^2.0.0",
+    "@types/debug": "^4.1.7",
+    "@types/express": "^4.17.13",
+    "@types/fs-extra": "^9.0.13",
+    "@types/he": "^1.1.2",
+    "@types/jsdom": "^16.2.14",
+    "@types/marked": "^4.0.3",
+    "@types/node": "^17.0.33",
+    "@types/recursive-readdir": "^2.2.1",
+    "@typescript-eslint/eslint-plugin": "^5.23.0",
+    "@typescript-eslint/parser": "^5.23.0",
+    "axios": "^0.27.2",
+    "eslint": "^8.15.0",
+    "nodemon": "^2.0.16",
+    "ts-node": "^10.7.0",
+    "typescript": "^4.6.4"
+  },
+  "homepage": "https://github.com/soluzionifutura/retry-module#readme",
+  "dependencies": {
+    "debug": "^4.3.4",
+    "express": "^4.18.1",
+    "fs-extra": "^10.1.0",
+    "github-markdown-css": "^5.1.0",
+    "he": "^1.2.0",
+    "highlight.js": "^11.5.1",
+    "jsdom": "^19.0.0",
+    "marked": "^4.0.15",
+    "recursive-readdir": "^2.2.2",
+    "socket.io": "^4.5.0",
+    "tsc-hooks": "^1.1.1"
+  }
+}

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test</title>
+  <style>
+    body {
+      padding: 20px;
+    }
+
+    .console {
+      margin: 16px 0;
+    }
+
+    .console pre {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      resize: vertical;
+      height: 100px;
+      min-height: 100px;
+
+      overflow: scroll;
+      overscroll-behavior-y: contain;
+      scroll-snap-type: y mandatory;
+    }
+
+    .console pre > div.error {
+      color: rgb(234, 46, 46);
+    }
+    /* .console.follow pre > div:last-child {
+      scroll-snap-align: start;
+    } */
+  </style>
+  <style id="code-style"></style>
+  <style id="md-style"></style>
+</head>
+<body class="markdown-body">
+  <script src="/socket.io/socket.io.js"></script>
+  <div id="content"></div>
+  <script>
+    const socket = new io()
+
+    setInterval(() => {
+      if (!socket.connected) {
+        console.log("trying to connect...")
+        socket.connect()
+      }
+    }, 5000)
+
+    const mapping = {}
+
+    const elements = Array.from(document.getElementsByClassName("backend-code-exec-wrapper"))
+    elements.forEach(element => {
+      const { id } = element
+      const consoleElement = document.getElementById(`${id}-console`)
+
+      mapping[id] = {
+        id,
+        consoleElement
+      }
+
+      socket.on(`${id}-data`, data => {
+        consoleElement.innerHTML += `<div class="data">${data}</div>`
+      })
+
+      socket.on(`${id}-error`, data => {
+        consoleElement.innerHTML += `<div class="error">${data}</div>`
+      })
+
+      socket.on(`${id}-end`, data => {
+        // consoleElement.innerHTML += `<div>END</div>`
+      })
+    })
+
+    function clearConsole(id) {
+      mapping[id].consoleElement.innerHTML = ""
+    }
+
+    function exec(id) {
+      socket.emit("exec", id)
+      clearConsole(id)
+    }
+
+    function kill(id) {
+      socket.emit("kill", id)
+    }
+  </script>
+</body>
+</html>
