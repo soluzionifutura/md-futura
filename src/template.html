@@ -27,9 +27,14 @@
     .console pre > div.error {
       color: rgb(234, 46, 46);
     }
-    /* .console.follow pre > div:last-child {
+
+    .console.stick-to-bottom pre > div:last-child {
       scroll-snap-align: start;
-    } */
+    }
+
+    .exec-button, .clear-button {
+      width: 65px;
+    }
   </style>
   <style id="code-style"></style>
   <style id="md-style"></style>
@@ -60,15 +65,19 @@
       }
 
       socket.on(`${id}-data`, data => {
-        consoleElement.innerHTML += `<div class="data">${data}</div>`
+        consoleElement.innerHTML += data.split("\n").map(data => `<div class="data">${data}</div>`).join("")
       })
 
       socket.on(`${id}-error`, data => {
-        consoleElement.innerHTML += `<div class="error">${data}</div>`
+        consoleElement.innerHTML += data.split("\n").map(data => `<div class="error">${data}</div>`).join("")
       })
 
       socket.on(`${id}-end`, data => {
-        // consoleElement.innerHTML += `<div>END</div>`
+        const button = document.getElementById(`${id}-exec-button`)
+
+        if (button.innerHTML !== "run") {
+          button.innerHTML = "run"
+        }
       })
     })
 
@@ -76,13 +85,25 @@
       mapping[id].consoleElement.innerHTML = ""
     }
 
-    function exec(id) {
-      socket.emit("exec", id)
-      clearConsole(id)
+    function exec(id, language) {
+      const button = document.getElementById(`${id}-exec-button`)
+      if (button.innerHTML === "run") {
+        clearConsole(id)
+        socket.emit("exec", id)
+        button.innerHTML = "stop"
+      } else {
+        socket.emit("kill", id)
+        button.innerHTML = "run"
+      }
     }
 
-    function kill(id) {
-      socket.emit("kill", id)
+    function onScroll(e) {
+      const element = e.target
+      if (element.offsetHeight + element.scrollTop >= element.scrollHeight - 5) {
+        element.parentElement.classList.add("stick-to-bottom")
+      } else {
+        element.parentElement.classList.remove("stick-to-bottom")
+      }
     }
   </script>
 </body>
