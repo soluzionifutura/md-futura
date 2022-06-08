@@ -12,6 +12,20 @@ setInterval(() => {
 }, 500 )
 ```
 
+``` ts
+const f = (x: number): string => {
+  return String(1 + x)
+}
+
+console.log(f(2))
+```
+
+``` ts
+const f = (x: number): string => {
+  return 1
+}
+```
+
 ```js
 const axios = require("axios")
 axios.get("https://jsonplaceholder.typicode.com/todos/1")

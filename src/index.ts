@@ -33,6 +33,7 @@ export const mdFutura = async({
 
   languagePlugins = {
     js: ({ snippetPath }) => ["node", snippetPath],
+    ts: ({ snippetPath }) => ["ts-node", snippetPath],
     py: ({ snippetPath }) => ["python", snippetPath],
     sh: ({ code }) => ["/bin/sh", "-c", code],
     ...languagePlugins
