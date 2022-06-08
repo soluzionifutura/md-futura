@@ -122,6 +122,11 @@ export const mdFutura = async({
 
       const proc = procMapping[id] = spawn(spawnArgs.shift()!, spawnArgs, { cwd: sandboxFolderPath })
 
+      proc.on("error", (err) => {
+        log(`sending error (${id})`)
+        socket.emit(`${id}-error`, err.message)
+      })
+
       proc.stdout.on("data", message => {
         log(`sending data (${id})`)
         socket.emit(`${id}-data`, message.toString())
