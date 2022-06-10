@@ -1,17 +1,14 @@
 import http from "http"
 import express from "express"
 import { join, parse } from "path"
-import { ensureDir, lstatSync, mkdirpSync, rmdir, statSync } from "fs-extra"
+import { rm, ensureDir, lstatSync, readFile, statSync, watch } from "fs-extra"
 import * as socketio from "socket.io"
-import { ChildProcessWithoutNullStreams, spawn } from "child_process"
-import debug from "debug"
 import recursive from "recursive-readdir"
 import { compileMd } from "./lib/compileMd"
-import { CodeSnippet, CodeTheme, CompiledMd, LanguagePlugin, MdTheme } from "./types"
-import { v4 } from "uuid"
-import { rmdirSync, writeFileSync } from "fs"
-
-const log = debug("info")
+import { CodeSnippet, CodeTheme, CompiledMd, LanguagePlugins, MdTheme } from "./types"
+import procHandler from "./lib/procHandler"
+import { EventEmitter } from "stream"
+EventEmitter.defaultMaxListeners = 1000
 
 export const mdFutura = async({
   port = 8080,
@@ -19,22 +16,22 @@ export const mdFutura = async({
   buildPath = join(lstatSync(sourcePath).isDirectory() ? sourcePath : parse(sourcePath).dir, ".mdf"),
   codeTheme = "stackoverflow-light",
   mdTheme = "github-markdown-light",
-  languagePlugins = {}
+  languagePlugins = {},
+  hotReload = true
 }: {
   port?: number,
   buildPath?: string,
   sourcePath: string,
   codeTheme?: CodeTheme,
   mdTheme?: MdTheme,
-  languagePlugins?: {
-    [language: string]: LanguagePlugin
-  }
+  languagePlugins?: LanguagePlugins,
+  hotReload?: boolean
 }): Promise<void> => {
 
   languagePlugins = {
     js: ({ snippetPath }) => ["node", snippetPath],
     ts: ({ snippetPath }) => ["ts-node", snippetPath],
-    py: ({ snippetPath }) => ["python", snippetPath],
+    py: ({ snippetPath }) => ["python3", snippetPath],
     sh: ({ code }) => ["/bin/sh", "-c", code],
     ...languagePlugins
   }
@@ -44,107 +41,113 @@ export const mdFutura = async({
 
   const io = new socketio.Server(server)
 
-  await rmdir(buildPath, { recursive: true })
+  await rm(buildPath, { recursive: true })
   await ensureDir(buildPath)
 
-  const compiledMd: CompiledMd[] = []
+  const compiledMd: {[mdPath: string]: CompiledMd } = {}
+
+  const importMd = async(mdPath: string): Promise<CompiledMd> => {
+    const md = await readFile(join(sourcePath, mdPath), "utf-8")
+    const data = await compileMd({ md, mdPath, codeTheme, mdTheme, supportedLanguages })
+    compiledMd[data.mdPath] = data
+    return data
+  }
+
+  const watchMd = (mdPath: string): void => {
+    let trigger = true
+    const fullPath = join(sourcePath, mdPath)
+
+    if (hotReload) {
+      watch(fullPath, async() => {
+        if (trigger) {
+          try {
+            const data = await importMd(mdPath)
+            emitter.emit("fileChange", mdPath, data.contentHtml, data.snippets)
+          } catch (err) {
+            delete compiledMd[mdPath]
+            emitter.emit("fileDeleted", mdPath)
+          }
+        }
+        trigger = !trigger
+      })
+    }
+  }
+
+  const importAndWatchMd = async(mdPath: string): Promise<CompiledMd> => {
+    const data = await importMd(mdPath)
+    if (hotReload) {
+      watchMd(data.mdPath)
+    }
+    return data
+  }
 
   if (statSync(sourcePath).isDirectory()) {
     const files = (await recursive(sourcePath)).filter((file) => parse(file).ext.toLocaleLowerCase() === ".md")
-    const data = await Promise.all(files.map(mdPath => compileMd({ sourcePath, mdPath, buildPath, codeTheme, mdTheme, supportedLanguages })))
-    compiledMd.push(...data)
+    await Promise.all(files.map(mdPath => {
+      return importAndWatchMd(mdPath.substring(sourcePath.length))
+    }))
   } else {
-    const data = await compileMd({ sourcePath, mdPath: sourcePath, buildPath, codeTheme, mdTheme, supportedLanguages })
-    compiledMd.push(data)
+    const { dir, base } = parse(sourcePath)
+    sourcePath = dir
+    await importAndWatchMd(`/${base}`)
   }
 
-  compiledMd.map(({ path, html }) => app.get(path, (_, res) => res.set("content-type", "text/html").send(html)))
+  const emitter = new EventEmitter()
 
-  const codeSnippetsMap = compiledMd.reduce((acc: {[key: string]: CodeSnippet }, { snippets }) => {
-    snippets.forEach(e => {
-      acc[e.name] = e
-    })
-    return acc
-  }, {})
+  app.get("*", async({ path }, res, next) => {
+    const mdPath = decodeURIComponent(path)
 
-  app.use("/", express.static(sourcePath))
+    if (compiledMd[mdPath]) {
+      return res.set("content-type", "text/html").send(compiledMd[mdPath].html)
+    }
 
-  app.get("*", (req, res) => {
-    res.set("content-type", "text/html").send(`<ul>
-      ${compiledMd.map(({ path }) => `<li><a href='http://localhost:${[port]}${path}'>${path}</li>`).join("")}
-    </ul>`)
-  })
-
-  io.on("connection", socket => {
-    const procMapping: {[key: string]: ChildProcessWithoutNullStreams} = {}
-
-    const killProc = (id: string): void => {
-      const proc = procMapping[id]
-      if (proc) {
-        proc.kill()
-        log(`proc killed (${id})`)
-        delete procMapping[id]
+    if (parse(mdPath).ext === ".md") {
+      try {
+        const { html } = await importAndWatchMd(mdPath)
+        return res.set("content-type", "text/html").send(html)
+      } catch (err) {
+        const { message } = err as Error
+        if (!message.includes("ENOENT")) {
+          throw err
+        }
       }
     }
 
-    socket.on("disconnect", () => {
-      Object.keys(procMapping).forEach(id => {
-        killProc(id)
-      })
-    })
+    next()
+  })
 
-    socket.on("kill", id => {
-      killProc(id)
-    })
+  app.use(express.static(sourcePath))
 
-    socket.on("exec", id => {
-      const codeSnippet = codeSnippetsMap[id]
-      if (!codeSnippet) {
-        return
+  app.use(async(_, res) => {
+    const md = Object.keys(compiledMd).map(mdPath => `- [${mdPath}](${mdPath})`).join("\n")
+    const { html } = await compileMd({ md, mdPath: "404", mdTheme, codeTheme, supportedLanguages })
+    res.set("content-type", "text/html").send(html)
+  })
+
+  io.on("connection", socket => {
+    const { codeSnippetsMap } = procHandler({ socket, languagePlugins, buildPath, compiledMd })
+
+    if (hotReload) {
+      const fileChangeCallback = (mdPath: string, content: string, snippets: CodeSnippet[]): void => {
+        snippets.forEach(e => {
+          codeSnippetsMap[e.name] = e
+        })
+        socket.emit(`fileChanged-${mdPath}`, content)
       }
-      const { language, code } = codeSnippet
+      emitter.on("fileChange", fileChangeCallback)
 
-      if (procMapping[id]) {
-        log(`proc already started (${id})`)
-        return
+      const fileDeletedCallback = (mdPath: string): void => {
+        socket.emit(`fileDeleted-${mdPath}`)
       }
+      emitter.on("fileDeleted", fileDeletedCallback)
 
-      const languagePlugin = languagePlugins[language]
-      if (!languagePlugin) {
-        return
-      }
-
-      const sandboxFolderPath = join(buildPath, v4())
-      const snippetPath = join(sandboxFolderPath, id)
-      mkdirpSync(sandboxFolderPath)
-      writeFileSync(snippetPath, code)
-      const spawnArgs = languagePlugin({ snippetPath, code: codeSnippet.code })
-
-      const proc = procMapping[id] = spawn(spawnArgs.shift()!, spawnArgs, { cwd: sandboxFolderPath })
-
-      proc.on("error", (err) => {
-        log(`sending error (${id})`)
-        socket.emit(`${id}-error`, err.message)
+      socket.on("disconnect", () => {
+        emitter.removeListener("fileChange", fileChangeCallback)
+        emitter.removeListener("fileDeleted", fileDeletedCallback)
       })
-
-      proc.stdout.on("data", message => {
-        log(`sending data (${id})`)
-        socket.emit(`${id}-data`, message.toString())
-      })
-
-      proc.stderr.on("data", message => {
-        log(`sending error (${id})`)
-        socket.emit(`${id}-error`, message.toString())
-      })
-
-      proc.on("close", () => {
-        socket.emit(`${id}-end`)
-        rmdirSync(sandboxFolderPath, { recursive: true })
-        delete procMapping[id]
-      })
-    })
+    }
   })
 
   // eslint-disable-next-line no-console
-  server.listen(port, () => console.log(`Available resources:\n${compiledMd.map(({ path }) => `- http://localhost:${[port]}${path}`).join("\n")}`))
+  server.listen(port, () => console.log(`Available resources:\n${Object.keys(compiledMd).map(mdPath => `- http://localhost:${[port]}${mdPath}`).join("\n")}`))
 }

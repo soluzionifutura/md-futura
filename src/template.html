@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Test</title>
   <style>
     body {
       padding: 20px;
@@ -43,6 +42,8 @@
   <script src="/socket.io/socket.io.js"></script>
   <div id="content"></div>
   <script>
+    const wait = async(time) => new Promise(resolve => setTimeout(resolve, time))
+
     const socket = new io()
 
     setInterval(() => {
@@ -52,49 +53,78 @@
       }
     }, 5000)
 
+    const content = document.getElementById("content")
+
     const mapping = {}
 
-    const elements = Array.from(document.getElementsByClassName("backend-code-exec-wrapper"))
-    elements.forEach(element => {
-      const { id } = element
-      const consoleElement = document.getElementById(`${id}-console`)
-
-      mapping[id] = {
-        id,
-        consoleElement
-      }
-
-      socket.on(`${id}-data`, data => {
-        consoleElement.innerHTML += data.split("\n").map(data => `<div class="data">${data}</div>`).join("")
+    socket.on(`fileChanged-${document.location.pathname}`, async data => {
+      Object.values(mapping).forEach(({ id }) => {
+        kill(id)
+        socket.removeAllListeners(`${id}-data`)
+        socket.removeAllListeners(`${id}-error`)
+        socket.removeAllListeners(`${id}-end`)
+        delete mapping[id]
       })
-
-      socket.on(`${id}-error`, data => {
-        consoleElement.innerHTML += data.split("\n").map(data => `<div class="error">${data}</div>`).join("")
-      })
-
-      socket.on(`${id}-end`, data => {
-        const button = document.getElementById(`${id}-exec-button`)
-
-        if (button.innerHTML !== "run") {
-          button.innerHTML = "run"
-        }
-      })
+      await wait(200)
+      content.innerHTML = data
+      scrapeContentElements()
     })
+
+    socket.on(`fileDeleted-${document.location.pathname}`, () => {
+      window.location.reload()
+    })
+
+    const scrapeContentElements = () => {
+      const elements = Array.from(document.getElementsByClassName("backend-code-exec-wrapper"))
+      elements.forEach(element => {
+        const { id } = element
+        const consoleElement = document.getElementById(`${id}-console`)
+        const execButtonElement = document.getElementById(`${id}-exec-button`)
+        mapping[id] = {
+          id,
+          consoleElement,
+          execButtonElement
+        }
+
+        socket.on(`${id}-data`, data => {
+          consoleElement.innerHTML += data.split("\n").map(data => `<div class="data">${data}</div>`).join("")
+        })
+
+        socket.on(`${id}-error`, data => {
+          consoleElement.innerHTML += data.split("\n").map(data => `<div class="error">${data}</div>`).join("")
+        })
+
+        socket.on(`${id}-end`, data => {
+          const button = mapping[id].execButtonElement
+
+          if (button.innerHTML !== "run") {
+            button.innerHTML = "run"
+          }
+        })
+      })
+    }
+
+    scrapeContentElements()
 
     function clearConsole(id) {
       mapping[id].consoleElement.innerHTML = ""
     }
 
     function exec(id, language) {
-      const button = document.getElementById(`${id}-exec-button`)
+      const button = mapping[id].execButtonElement
       if (button.innerHTML === "run") {
         clearConsole(id)
         socket.emit("exec", id)
         button.innerHTML = "stop"
       } else {
-        socket.emit("kill", id)
-        button.innerHTML = "run"
+        kill(id)
       }
+    }
+
+    function kill(id) {
+      const button = mapping[id].execButtonElement
+      socket.emit("kill", id)
+      button.innerHTML = "run"
     }
 
     function onScroll(e) {

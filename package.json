@@ -16,7 +16,7 @@
   "scripts": {
     "start": "ts-node ./src/index.ts",
     "build": "rm -rf dist && tsc --project tsconfig.src.json && cp ./src/*.html ./dist",
-    "live": "DEBUG=info nodemon -x \"ts-node\" ./test/test.ts --ext ts,html,md --ignore ./test/generated",
+    "live": "DEBUG=info nodemon -x \"ts-node\" ./test/test.ts --ext ts,html --ignore ./test/md",
     "prepare": "npm run build",
     "test": "ts-node ./test/test.ts"
   },

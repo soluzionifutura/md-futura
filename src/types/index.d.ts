@@ -6,7 +6,8 @@ export type CodeSnippet = {
 
 export type CompiledMd = {
   html: string,
-  path: string,
+  contentHtml: string,
+  mdPath: string,
   snippets: CodeSnippet[]
 }
 
@@ -15,3 +16,7 @@ export type CodeTheme = "a11y-dark" | "a11y-light" | "agate" | "an-old-hope" | "
 export type MdTheme = "github-markdown" | "github-markdown-dark" | "github-markdown-light"
 
 export type LanguagePlugin = ((data: { snippetPath: string, code: string }) => string[]) | null
+
+export type LanguagePlugins = {
+  [language: string]: LanguagePlugin
+}

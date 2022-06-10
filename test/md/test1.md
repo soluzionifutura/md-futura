@@ -9,7 +9,29 @@
   ```
 
   ```sh
-  echo "initializing enpty repo:"
+  echo ciao
+  sleep 2
+  echo mare
+  ```
+
+  ```py
+  import time
+  print("parto")
+  for i in range(3):
+    time.sleep(1)
+    print("tic")
+  ```
+
+  ```js
+  let i = 0
+  setInterval(() => {
+    i++
+    console.log("ciao", i)
+  }, 500 )
+  ```
+
+  ```sh
+  echo "initializing enpty repo"
   git init
 
   echo "creating 3 files:"
@@ -42,3 +64,4 @@
   ```
 
 [test2](./test2.md)
+[test4](./test4.md)
