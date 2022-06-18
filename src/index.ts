@@ -8,6 +8,7 @@ import { compileMd } from "./lib/compileMd"
 import { CodeSnippet, CodeTheme, CompiledMd, LanguagePlugins, MdTheme } from "./types"
 import procHandler from "./lib/procHandler"
 import { EventEmitter } from "stream"
+import { rmdirSync } from "fs"
 EventEmitter.defaultMaxListeners = 1000
 
 export const mdFutura = async({
@@ -27,6 +28,21 @@ export const mdFutura = async({
   languagePlugins?: LanguagePlugins,
   hotReload?: boolean
 }): Promise<void> => {
+  const exitRouter = (options: { exit: boolean }): void => {
+    if (options.exit) {
+      process.exit()
+    }
+  }
+
+  void ["SIGINT", "SIGUSR1", "SIGUSR2", "uncaughtException", "SIGTERM"].forEach((eventType) => {
+    process.on(eventType, exitRouter.bind(null, { exit: true }))
+  })
+
+  process.on("exit", () => {
+    try {
+      rmdirSync(buildPath)
+    } catch (_) {}
+  })
 
   languagePlugins = {
     js: ({ snippetPath }) => ["node", snippetPath],
