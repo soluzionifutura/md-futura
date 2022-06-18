@@ -4,7 +4,7 @@ import { rmSync, writeFileSync } from "fs"
 import { ChildProcessWithoutNullStreams, spawn } from "child_process"
 import { join } from "path"
 import { v4 } from "uuid"
-import { mkdirpSync } from "fs-extra"
+import { ensureDirSync } from "fs-extra"
 import { CodeSnippet, CompiledMd, LanguagePlugins } from "../types"
 
 const log = debug("info")
@@ -71,7 +71,7 @@ export default ({ socket, compiledMd, languagePlugins, buildPath }: { socket: So
 
     const sandboxFolderPath = join(buildPath, v4())
     const snippetPath = join(sandboxFolderPath, id)
-    mkdirpSync(sandboxFolderPath)
+    ensureDirSync(sandboxFolderPath)
     writeFileSync(snippetPath, code)
     const spawnArgs = languagePlugin({ snippetPath, code: codeSnippet.code })
 

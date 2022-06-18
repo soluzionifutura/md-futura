@@ -1,7 +1,7 @@
 import http from "http"
 import express from "express"
 import { join, parse } from "path"
-import { rm, ensureDir, lstatSync, readFile, statSync, watch } from "fs-extra"
+import { rm, ensureDir, lstatSync, readFile, statSync, watch, existsSync } from "fs-extra"
 import * as socketio from "socket.io"
 import recursive from "recursive-readdir"
 import { compileMd } from "./lib/compileMd"
@@ -57,7 +57,9 @@ export const mdFutura = async({
 
   const io = new socketio.Server(server)
 
-  await rm(buildPath, { recursive: true })
+  if (existsSync(buildPath)) {
+    await rm(buildPath, { recursive: true })
+  }
   await ensureDir(buildPath)
 
   const compiledMd: {[mdPath: string]: CompiledMd } = {}
